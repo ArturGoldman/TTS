@@ -1,0 +1,83 @@
+{
+  "name": "default_config",
+  "n_gpu": 1,
+  "MelSpectrogram": {
+    "sr": 22050,
+    "win_length": 1024,
+    "hop_length": 256,
+    "n_fft": 1024,
+    "f_min": 0,
+    "f_max": 8000,
+    "n_mels": 80,
+    "power": 1.0,
+    "pad_value": -11.5129251
+  },
+  "arch": {
+    "type": "FastSpeech",
+    "args": {
+      "d_model": 384,
+      "nhead": 2,
+      "d_hid": 384,
+      "kernel_sz": 3,
+      "filter_sz": 1536,
+      "dur_pred_filter_sz": 256,
+      "nlayers": 6,
+      "n_mels": 80,
+      "dropout": 0.1,
+      "frame_max": 5000
+    }
+  },
+  "data": {
+    "train": {
+      "batch_size": 20,
+      "num_workers": 5,
+      "overfit": true,
+      "datasets": [
+        {
+          "type": "LJSpeech",
+          "args": {
+            "root": ".",
+            "limit": 20
+          }
+        }
+      ],
+      "collator": {
+        "type": "LJSpeech_collator",
+        "args": {
+        }
+      }
+    }
+  },
+  "optimizer": {
+    "type": "SGD",
+    "args": {
+      "lr": 3e-4
+    }
+  },
+  "loss": {
+    "type": "CTCLoss",
+    "args": {}
+  },
+  "lr_scheduler": {
+    "type": "OneCycleLR",
+    "args": {
+      "steps_per_epoch": 100,
+      "epochs": 50,
+      "anneal_strategy": "cos",
+      "max_lr": 4e-3,
+      "pct_start": 0.2
+    }
+  },
+  "trainer": {
+    "epochs": 50,
+    "save_dir": "saved/",
+    "save_period": 5,
+    "verbosity": 2,
+    "monitor": "min loss_ft",
+    "early_stop": 100,
+    "visualize": "wandb",
+    "wandb_project": "TTS-HSE-DLA",
+    "len_epoch": 100,
+    "grad_norm_clip": 10
+  }
+}
