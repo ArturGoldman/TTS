@@ -12,8 +12,11 @@ class FTLoss(nn.Module):
     def __call__(self, outputs: Tensor, batch: Batch):
         # outputs: [batch_sz, seq_len, n_mels]
         ground_truth_spectrogram = self.melspec(batch.waveform)
-        MSE = ((outputs-ground_truth_spectrogram)**2).mean()
-        return MSE
+        MSE = 0
+        for i in range(outputs.size(0)):
+            gts = self.melspec(batch.waveform[i, :batch.waveform_length[i]])
+            MSE += ((outputs[i, :gts.size(0), :]-gts)**2).mean()
+        return MSE/outputs.size(0)
 
 
 class DPLoss(nn.Module):

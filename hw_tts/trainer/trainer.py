@@ -51,7 +51,7 @@ class Trainer(BaseTrainer):
 
         self.lr_scheduler = lr_scheduler
         self.log_step = 100
-        self.galigner = GraphemeAligner()
+        self.galigner = GraphemeAligner().to(self.device)
 
         self.train_metrics = MetricTracker(
             "loss_fs", "loss_dp", "grad norm", writer=self.writer
