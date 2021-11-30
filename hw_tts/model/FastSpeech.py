@@ -66,7 +66,7 @@ class MultiHeadAttention(nn.Module):
             Zs.append(self.heads[i](x))
         Zs = torch.cat(Zs, dim=-1)
         out = self.combiner(Zs)
-        return nn.ReLU(out)
+        return nn.ReLU()(out)
 
 
 class ConvNet1d(nn.Module):
@@ -146,30 +146,34 @@ class LengthRegulator(nn.Module):
         self.dpred = DurationPredictor(d_model, filter_sz, kernel_sz, dropout)
         self.galigner = GraphemeAligner()
 
-    def forward(self, y, x):
+    def forward(self, y, x, device, melspec):
         # y: encoder output, [batch_sz, seq_ln, emb_sz]
         # x: initial batch with wav info
 
         preds = self.dpred(y)
         # preds: [batch_sz, seq_ln, 1]
         if self.training:
-            segments, tot_frames = self.galigner(x)
+            durs = self.galigner(x.waveform, x.waveform_length, x.transcript)
             enlarged = []
             ground_truth_lns = []
             for i in range(y.size(0)):
-                cur_lns = torch.tensor([segment.length for segment in segments[i]])
-                ground_truth_lns.append(cur_lns)
-                cur_enlargement = torch.repeat_interleave(y[i, :x.token_lengths[i], :], cur_lns, dim=0)
+                true_mel_sz = melspec(x.waveform[i]).size(-2)
+                cur_lns = (true_mel_sz*durs[i]).to(device)
+                approx_ln = torch.round(cur_lns).int()
+                ground_truth_lns.append(approx_ln[1:])
+                cur_enlargement = torch.repeat_interleave(y[i, :x.token_lengths[i], :], approx_ln[1:], dim=0)
                 # firstly i want to restore true number of frames for melspec, thus i add zeros
-                true_sz = torch.full((tot_frames[i], y.size(2)), Batch.pad_value)
-                true_sz[segments[i][0].start:segments[i][-1].end] = cur_enlargement
+                true_sz = torch.full((true_mel_sz, y.size(2)), Batch.pad_value)
+                extra = approx_ln.sum() - true_mel_sz
+                if extra < 0:
+                    extra = 0
+                true_sz[approx_ln[0]-extra:approx_ln.sum()-extra] = cur_enlargement
                 enlarged.append(true_sz)
             enlarged = pad_sequence(enlarged, batch_first=True, padding_value=Batch.pad_value)
-
-            return enlarged, preds.squeeze(-1), torch.log(torch.tensor(ground_truth_lns))
+            return enlarged, preds.squeeze(-1), ground_truth_lns
 
         else:
-            lns = (self.alpha * torch.exp(preds)).int().squeeze(-1)
+            lns = torch.round(self.alpha * torch.exp(preds)).squeeze(-1)
             enlarged = []
             new_lns = []
             for i in range(y.size(0)):
@@ -216,16 +220,16 @@ class FastSpeech(nn.Module):
 
         self.predictor = nn.Linear(d_model, n_mels)
 
-    def forward(self, x: Batch):
+    def forward(self, x: Batch, device: torch.device, melspec: nn.Module):
         # x: Batch class.
         # x.tokens: [batch_sz, seq_ln]
         out = self.phoneme_embedding(x.tokens) * self.d_model**0.5
         out = self.phon_pos_enc(out)
         out = self.encoder(out)
 
-        out, pred_log_len, true_log_len = self.length_regulator(out, x)
+        out, pred_log_len, true_log_len = self.length_regulator(out, x, device, melspec)
 
-        out = self.mult_pos_enc(out)
+        out = self.mult_pos_enc(out.to(device))
         out = self.decoder(out)
         out = self.predictor(out)
 

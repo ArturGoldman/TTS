@@ -15,6 +15,7 @@
   "arch": {
     "type": "FastSpeech",
     "args": {
+      "ntoken": 200,
       "d_model": 384,
       "nhead": 2,
       "d_hid": 384,
@@ -29,33 +30,38 @@
   },
   "data": {
     "train": {
-      "batch_size": 20,
+      "batch_size": 16,
       "num_workers": 5,
       "overfit": true,
       "datasets": [
         {
-          "type": "LJSpeech",
+          "type": "LJSpeechDataset",
           "args": {
             "root": ".",
-            "limit": 20
+            "limit": 16
           }
         }
       ],
       "collator": {
-        "type": "LJSpeech_collator",
+        "type": "LJSpeechCollator",
         "args": {
         }
       }
     }
   },
   "optimizer": {
-    "type": "SGD",
+    "type": "Adam",
     "args": {
-      "lr": 3e-4
+      "lr": 3e-4,
+      "betas": [0.9, 0.98]
     }
   },
-  "loss": {
-    "type": "CTCLoss",
+  "loss_fs": {
+    "type": "FSLoss",
+    "args": {}
+  },
+  "loss_dp": {
+    "type": "DPLoss",
     "args": {}
   },
   "lr_scheduler": {
@@ -71,7 +77,7 @@
   "trainer": {
     "epochs": 50,
     "save_dir": "saved/",
-    "save_period": 5,
+    "save_period": 50,
     "verbosity": 2,
     "monitor": "min loss_ft",
     "early_stop": 100,

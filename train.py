@@ -34,7 +34,7 @@ def main(config):
     ntoken = len(GraphemeAligner()._labels)
 
     # build model architecture, then print to console
-    model = config.init_obj(config["arch"], module_arch, ntokens=ntoken)
+    model = config.init_obj(config["arch"], module_arch)
     logger.info(model)
 
     # prepare for (multi-device) GPU training

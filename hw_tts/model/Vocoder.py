@@ -5,6 +5,7 @@ import torch
 from torch import nn
 
 warnings.filterwarnings('ignore')
+sys.path.append('waveglow/')
 
 
 class Vocoder(nn.Module):

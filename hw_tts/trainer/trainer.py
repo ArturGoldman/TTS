@@ -54,7 +54,7 @@ class Trainer(BaseTrainer):
         self.log_step = 10
 
         self.train_metrics = MetricTracker(
-            "loss", "grad norm", writer=self.writer
+            "loss_fs", "loss_dp", "grad norm", writer=self.writer
         )
 
     def _clip_grad_norm(self):
@@ -112,12 +112,12 @@ class Trainer(BaseTrainer):
         return log
 
     def process_batch(self, batch: Batch, metrics: MetricTracker):
-        batch = batch.to(self.device)
+        batch.to(self.device)
         self.optimizer.zero_grad()
-        outputs, pred_log_len, true_log_len = self.model(batch)
+        outputs, pred_log_len, true_log_len = self.model(batch, self.device, self.criterion_fs.melspec)
 
         loss_fs = self.criterion_fs(outputs, batch)
-        loss_dp = self.criterion_dp(pred_log_len, true_log_len)
+        loss_dp = self.criterion_dp(batch, pred_log_len, true_log_len)
 
         loss_dp.backward(retain_graph=True)
         loss_fs.backward()

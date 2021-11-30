@@ -12,7 +12,8 @@ class LJSpeechDataset(torchaudio.datasets.LJSPEECH):
         self.limit = limit
         if limit is not None:
             random.seed(42)
-            self._index = random.shuffle(self._index)[:limit]
+            random.shuffle(self._index)
+            self._index = self._index[:limit]
 
     def __getitem__(self, index: int):
         waveform, _, _, transcript = super().__getitem__(self._index[index])

@@ -1,1 +1,1 @@
-from FastSpeechLosses import *
+from hw_tts.loss.FastSpeechLosses import *
