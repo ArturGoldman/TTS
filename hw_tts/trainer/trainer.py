@@ -36,11 +36,10 @@ class Trainer(BaseTrainer):
         super().__init__(model, optimizer, config, device)
         self.skip_oom = skip_oom
         self.config = config
-        self.overfit = config["data"]["train"]["overfit"]
         self.data_loader = data_loader
         self.criterion_fs = criterion_fs
         self.criterion_dp = criterion_dp
-        self.vocoder = Vocoder()
+        self.vocoder = Vocoder().to(self.device)
 
         if len_epoch is None:
             # epoch-based training
@@ -131,30 +130,32 @@ class Trainer(BaseTrainer):
 
         return loss_fs.item(), loss_dp.item()
 
-    def _valid_example(self, n_examples = 1):
+    def _valid_example(self, n_examples=1):
         """
         see how model works on example
         """
         self.model.eval()
         with torch.no_grad():
             for batch in self.data_loader:
-                output = self.model(batch)
+                batch.to(self.device)
+                output = self.model(batch, self.device, self.criterion_fs.melspec)
                 break
 
             ground_truth_melspec = self.criterion_fs.melspec(batch.waveform)
 
-            pred_wavs = self.vocoder.inference(output)
-            true_wavs = self.vocoder.inference(ground_truth_melspec)
             for i in range(min(n_examples, output.size(0))):
+                pred_wav = self.vocoder.inference(output[i].unsqueeze(0).transpose(-1, -2)).cpu()
+                true_wav = self.vocoder.inference(ground_truth_melspec[i].unsqueeze(0).transpose(-1, -2)).cpu()
+
                 self._log_spectrogram("val_pred", output[i])
                 self._log_spectrogram("val_ground_truth", ground_truth_melspec[i])
 
-                self._log_audios("val_pred_synth", pred_wavs[i].squeeze())
-                self._log_audios("val_true_synth", true_wavs[i].squeeze())
+                self._log_audios("val_pred_synth", pred_wav.squeeze())
+                self._log_audios("val_true_synth", true_wav.squeeze())
 
         # add histogram of model parameters to the tensorboard
-        for name, p in self.model.named_parameters():
-            self.writer.add_histogram(name, p, bins="auto")
+        #for name, p in self.model.named_parameters():
+        #    self.writer.add_histogram(name, p, bins="auto")
 
     def _progress(self, batch_idx):
         base = "[{}/{} ({:.0f}%)]"
@@ -167,8 +168,8 @@ class Trainer(BaseTrainer):
         return base.format(current, total, 100.0 * current / total)
 
     def _log_spectrogram(self, name, spec):
-        image = PIL.Image.open(plot_spectrogram_to_buf(spec.cpu().log()))
-        self.writer.add_image(name, ToTensor()(image))
+        image = PIL.Image.open(plot_spectrogram_to_buf(spec.cpu()))
+        self.writer.add_image(name, (ToTensor()(image)).transpose(-1, -2).flip(-1))
 
     def _log_audios(self, name, audio_example):
         audio = audio_example

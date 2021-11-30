@@ -30,15 +30,14 @@
   },
   "data": {
     "train": {
-      "batch_size": 16,
+      "batch_size": 10,
       "num_workers": 5,
-      "overfit": true,
       "datasets": [
         {
           "type": "LJSpeechDataset",
           "args": {
             "root": ".",
-            "limit": 16
+            "limit": 10
           }
         }
       ],
@@ -79,7 +78,7 @@
     "save_dir": "saved/",
     "save_period": 50,
     "verbosity": 2,
-    "monitor": "min loss_ft",
+    "monitor": "min loss_fs",
     "early_stop": 100,
     "visualize": "wandb",
     "wandb_project": "TTS-HSE-DLA",

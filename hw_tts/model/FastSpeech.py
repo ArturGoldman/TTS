@@ -160,6 +160,17 @@ class LengthRegulator(nn.Module):
                 true_mel_sz = melspec(x.waveform[i]).size(-2)
                 cur_lns = (true_mel_sz*durs[i]).to(device)
                 approx_ln = torch.round(cur_lns).int()
+                #prev_sum_ap = approx_ln.sum().item()
+                if approx_ln[1:].sum() > true_mel_sz:
+                    # this method reduces length poorly due to dramatic decrease
+                    # yet, i dont know yet other mathematically correct ways to tackle this
+                    coef = true_mel_sz/approx_ln[1:].sum()
+                    my_pow = 1
+                    while (approx_ln[1:].float()*coef**my_pow).int().sum() > true_mel_sz:
+                        my_pow += 1
+                    approx_ln[1:] = (approx_ln[1:].float()*coef**my_pow).int()
+                #if prev_sum_ap != approx_ln.sum():
+                #    print(approx_ln[0].item(), prev_sum_ap, approx_ln.sum().item(), true_mel_sz)
                 ground_truth_lns.append(approx_ln[1:])
                 cur_enlargement = torch.repeat_interleave(y[i, :x.token_lengths[i], :], approx_ln[1:], dim=0)
                 # firstly i want to restore true number of frames for melspec, thus i add zeros
@@ -173,7 +184,7 @@ class LengthRegulator(nn.Module):
             return enlarged, preds.squeeze(-1), ground_truth_lns
 
         else:
-            lns = torch.round(self.alpha * torch.exp(preds)).squeeze(-1)
+            lns = torch.round(self.alpha * torch.exp(preds)).int().squeeze(-1)
             enlarged = []
             new_lns = []
             for i in range(y.size(0)):
@@ -183,7 +194,7 @@ class LengthRegulator(nn.Module):
             enlarged = pad_sequence(enlarged, batch_first=True, padding_value=Batch.pad_value)
             new_lns = torch.tensor(new_lns)
 
-            return enlarged
+            return enlarged, None, None
 
 
 class FastSpeech(nn.Module):
