@@ -11,7 +11,7 @@ from torchvision.transforms import ToTensor
 from hw_tts.base import BaseTrainer
 from hw_tts.logger.utils import plot_spectrogram_to_buf
 from hw_tts.utils import inf_loop, MetricTracker
-from hw_tts.aligner import Batch
+from hw_tts.aligner import Batch, GraphemeAligner
 from hw_tts.model import Vocoder
 
 
@@ -50,7 +50,8 @@ class Trainer(BaseTrainer):
             self.len_epoch = len_epoch
 
         self.lr_scheduler = lr_scheduler
-        self.log_step = 10
+        self.log_step = 100
+        self.galigner = GraphemeAligner()
 
         self.train_metrics = MetricTracker(
             "loss_fs", "loss_dp", "grad norm", writer=self.writer
@@ -113,7 +114,7 @@ class Trainer(BaseTrainer):
     def process_batch(self, batch: Batch, metrics: MetricTracker):
         batch.to(self.device)
         self.optimizer.zero_grad()
-        outputs, pred_log_len, true_log_len = self.model(batch, self.device, self.criterion_fs.melspec)
+        outputs, pred_log_len, true_log_len = self.model(batch, self.device, self.criterion_fs.melspec, self.galigner)
 
         loss_fs = self.criterion_fs(outputs, batch)
         loss_dp = self.criterion_dp(batch, pred_log_len, true_log_len)
@@ -138,7 +139,7 @@ class Trainer(BaseTrainer):
         with torch.no_grad():
             for batch in self.data_loader:
                 batch.to(self.device)
-                output = self.model(batch, self.device, self.criterion_fs.melspec)
+                output = self.model(batch, self.device, self.criterion_fs.melspec, self.galigner)
                 break
 
             ground_truth_melspec = self.criterion_fs.melspec(batch.waveform)
@@ -169,7 +170,7 @@ class Trainer(BaseTrainer):
 
     def _log_spectrogram(self, name, spec):
         image = PIL.Image.open(plot_spectrogram_to_buf(spec.cpu()))
-        self.writer.add_image(name, (ToTensor()(image)).transpose(-1, -2).flip(-1))
+        self.writer.add_image(name, (ToTensor()(image)).transpose(-1, -2).flip(-2))
 
     def _log_audios(self, name, audio_example):
         audio = audio_example

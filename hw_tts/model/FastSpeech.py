@@ -5,7 +5,7 @@ import torch
 from torch import nn, Tensor
 import math
 from torch.nn.utils.rnn import pad_sequence
-from hw_tts.aligner import Batch, GraphemeAligner
+from hw_tts.aligner import Batch
 
 
 class PositionalEncoding(nn.Module):
@@ -144,20 +144,19 @@ class LengthRegulator(nn.Module):
         super().__init__()
         self.alpha = alpha
         self.dpred = DurationPredictor(d_model, filter_sz, kernel_sz, dropout)
-        self.galigner = GraphemeAligner()
 
-    def forward(self, y, x, device, melspec):
+    def forward(self, y, x: Batch, device, melspec, galigner):
         # y: encoder output, [batch_sz, seq_ln, emb_sz]
         # x: initial batch with wav info
 
         preds = self.dpred(y)
         # preds: [batch_sz, seq_ln, 1]
         if self.training:
-            durs = self.galigner(x.waveform, x.waveform_length, x.transcript)
+            durs = galigner(x.waveform, x.waveform_length, x.transcript)
             enlarged = []
             ground_truth_lns = []
             for i in range(y.size(0)):
-                true_mel_sz = melspec(x.waveform[i]).size(-2)
+                true_mel_sz = melspec(x.waveform[i, :x.waveform_length[i]]).size(-2)
                 cur_lns = (true_mel_sz*durs[i]).to(device)
                 approx_ln = torch.round(cur_lns).int()
                 #prev_sum_ap = approx_ln.sum().item()
@@ -186,13 +185,10 @@ class LengthRegulator(nn.Module):
         else:
             lns = torch.round(self.alpha * torch.exp(preds)).int().squeeze(-1)
             enlarged = []
-            new_lns = []
             for i in range(y.size(0)):
                 enlarged.append(
                     torch.repeat_interleave(y[i, :x.token_lengths[i], :], lns[i, :x.token_lengths[i]], dim=0))
-                new_lns.append(lns[i, :x.token_lengths[i]].sum().item())
             enlarged = pad_sequence(enlarged, batch_first=True, padding_value=Batch.pad_value)
-            new_lns = torch.tensor(new_lns)
 
             return enlarged, None, None
 
@@ -231,14 +227,14 @@ class FastSpeech(nn.Module):
 
         self.predictor = nn.Linear(d_model, n_mels)
 
-    def forward(self, x: Batch, device: torch.device, melspec: nn.Module):
+    def forward(self, x: Batch, device: torch.device, melspec: nn.Module, galigner: nn.Module):
         # x: Batch class.
         # x.tokens: [batch_sz, seq_ln]
         out = self.phoneme_embedding(x.tokens) * self.d_model**0.5
         out = self.phon_pos_enc(out)
         out = self.encoder(out)
 
-        out, pred_log_len, true_log_len = self.length_regulator(out, x, device, melspec)
+        out, pred_log_len, true_log_len = self.length_regulator(out, x, device, melspec, galigner)
 
         out = self.mult_pos_enc(out.to(device))
         out = self.decoder(out)

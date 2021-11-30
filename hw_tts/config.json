@@ -66,7 +66,7 @@
   "lr_scheduler": {
     "type": "OneCycleLR",
     "args": {
-      "steps_per_epoch": 100,
+      "steps_per_epoch": 500,
       "epochs": 50,
       "anneal_strategy": "cos",
       "max_lr": 4e-3,
@@ -79,10 +79,10 @@
     "save_period": 50,
     "verbosity": 2,
     "monitor": "min loss_fs",
-    "early_stop": 100,
+    "early_stop": 50,
     "visualize": "wandb",
     "wandb_project": "TTS-HSE-DLA",
-    "len_epoch": 100,
+    "len_epoch": 500,
     "grad_norm_clip": 10
   }
 }

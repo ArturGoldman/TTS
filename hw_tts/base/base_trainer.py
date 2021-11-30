@@ -16,7 +16,6 @@ class BaseTrainer:
         self.config = config
         self.logger = config.get_logger("trainer", config["trainer"]["verbosity"])
 
-
         self.model = model
         self.optimizer = optimizer
 
