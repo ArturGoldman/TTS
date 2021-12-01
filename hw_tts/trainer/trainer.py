@@ -77,10 +77,14 @@ class Trainer(BaseTrainer):
         for batch_idx, batch in enumerate(
                 tqdm(self.data_loader, desc="train", total=self.len_epoch)
         ):
+            to_log = False
+            if batch_idx + 1 == self.len_epoch or batch_idx + 1 == self.len_epoch // 2:
+                to_log = True
             try:
                 l_ft, l_dp = self.process_batch(
                     batch,
-                    metrics=self.train_metrics
+                    metrics=self.train_metrics,
+                    to_log=to_log
                 )
             except RuntimeError as e:
                 if "out of memory" in str(e) and self.skip_oom:
@@ -93,7 +97,7 @@ class Trainer(BaseTrainer):
                 else:
                     raise e
             self.train_metrics.update("grad norm", self.get_grad_norm())
-            if batch_idx % self.log_step == 0 or (batch_idx+1 == self.len_epoch and epoch == self.epochs):
+            if batch_idx % self.log_step == 0 or (batch_idx + 1 == self.len_epoch and epoch == self.epochs):
                 self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
                 self.logger.debug(
                     "Train Epoch: {} {} Loss_fs: {:.6f} Loss_dp: {:.6f}".format(
@@ -104,7 +108,7 @@ class Trainer(BaseTrainer):
                     "learning rate", self.lr_scheduler.get_last_lr()[0]
                 )
                 self._log_scalars(self.train_metrics)
-            if batch_idx+1 >= self.len_epoch:
+            if batch_idx + 1 >= self.len_epoch:
                 break
 
         self._valid_example()
@@ -113,12 +117,12 @@ class Trainer(BaseTrainer):
 
         return log
 
-    def process_batch(self, batch: Batch, metrics: MetricTracker):
+    def process_batch(self, batch: Batch, metrics: MetricTracker, to_log: bool):
         batch.to(self.device)
         self.optimizer.zero_grad()
-        outputs, pred_log_len, true_log_len = self.model(batch, self.device, self.criterion_fs.melspec, self.galigner)
+        outputs, new_lns, pred_log_len, true_log_len = self.model(batch, self.device, self.criterion_fs.melspec, self.galigner)
 
-        loss_fs = self.criterion_fs(outputs, batch)
+        loss_fs = self.criterion_fs(outputs, new_lns, batch)
         loss_dp = self.criterion_dp(batch, pred_log_len, true_log_len)
 
         loss = loss_fs + loss_dp
@@ -127,6 +131,12 @@ class Trainer(BaseTrainer):
         self.optimizer.step()
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
+
+        if to_log:
+            j = random.randint(0, outputs.size(0)-1)
+            ground_truth_melspec = self.criterion_fs.melspec(batch.waveform)
+            self._log_spectrogram("train_pred", outputs[j].detach())
+            self._log_spectrogram("train_ground_truth", ground_truth_melspec[j])
 
         metrics.update("loss_fs", loss_fs.item())
         metrics.update("loss_dp", loss_dp.item())
@@ -155,7 +165,7 @@ class Trainer(BaseTrainer):
                 self._log_audios("val_true_synth", true_wav.squeeze())
 
         # add histogram of model parameters to the tensorboard
-        #for name, p in self.model.named_parameters():
+        # for name, p in self.model.named_parameters():
         #    self.writer.add_histogram(name, p, bins="auto")
 
     def _progress(self, batch_idx):

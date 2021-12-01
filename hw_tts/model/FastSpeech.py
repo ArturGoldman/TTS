@@ -155,24 +155,20 @@ class LengthRegulator(nn.Module):
             durs = galigner(x.waveform, x.waveform_length, x.transcript)
             enlarged = []
             ground_truth_lns = []
+            new_lns = []
             for i in range(y.size(0)):
                 rel_lengths = durs[i]/durs[i].sum()
                 true_ln = melspec(x.waveform[i, :x.waveform_length[i]]).size(0)
                 approx_lns = torch.round(true_ln*rel_lengths).int().to(device)
-                if approx_lns.sum() > true_ln:
-                    approx_lns[-1] = 0
-                    if approx_lns.sum() > true_ln:
-                        approx_lns[0] = 0
-                        if approx_lns.sum() > true_ln:
-                            approx_lns = (true_ln*rel_lengths).int().to(device)
                 cur_enlargement = torch.repeat_interleave(y[i, :x.token_lengths[i], :], approx_lns[1:-1], dim=0)
                 # firstly i want to restore true number of frames for melspec, thus i add zeros
-                true_sz = torch.full((true_ln, y.size(2)), Batch.pad_value)
-                true_sz[approx_lns[0]:approx_lns[:-1].sum()] = cur_enlargement
+                true_sz = torch.full((approx_lns.sum(), y.size(2)), Batch.pad_value)
+                true_sz[approx_lns[0]:approx_lns[-1]] = cur_enlargement
                 ground_truth_lns.append(approx_lns[1:-1])
                 enlarged.append(true_sz)
-            enlarged = pad_sequence(enlarged, batch_first=True, padding_value=Batch.pad_value)
-            return enlarged, preds.squeeze(-1), ground_truth_lns
+                new_lns.append(approx_lns.sum().item())
+            enlarged = pad_sequence(enlarged, batch_first=True, padding_value=0.)
+            return enlarged, new_lns, preds.squeeze(-1), ground_truth_lns
 
         else:
             lns = torch.round(self.alpha * torch.exp(preds)).int().squeeze(-1)
@@ -182,7 +178,7 @@ class LengthRegulator(nn.Module):
                     torch.repeat_interleave(y[i, :x.token_lengths[i], :], lns[i, :x.token_lengths[i]], dim=0))
             enlarged = pad_sequence(enlarged, batch_first=True, padding_value=Batch.pad_value)
 
-            return enlarged, None, None
+            return enlarged, None, None, None
 
 
 class FastSpeech(nn.Module):
@@ -226,14 +222,14 @@ class FastSpeech(nn.Module):
         out = self.phon_pos_enc(out)
         out = self.encoder(out)
 
-        out, pred_log_len, true_log_len = self.length_regulator(out, x, device, melspec, galigner)
+        out, new_lns, pred_log_len, true_log_len = self.length_regulator(out, x, device, melspec, galigner)
 
         out = self.mult_pos_enc(out.to(device))
         out = self.decoder(out)
         out = self.predictor(out)
 
         if self.training:
-            return out, pred_log_len, true_log_len
+            return out, new_lns, pred_log_len, true_log_len
 
         return out
 
