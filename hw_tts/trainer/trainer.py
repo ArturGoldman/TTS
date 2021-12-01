@@ -162,6 +162,7 @@ class Trainer(BaseTrainer):
 
                 self._log_audios("val_pred_synth", pred_wav.squeeze())
                 self._log_audios("val_true_synth", true_wav.squeeze())
+                self.writer.add_text("val_gt_text", batch.transcript)
 
         # add histogram of model parameters to the tensorboard
         # for name, p in self.model.named_parameters():
