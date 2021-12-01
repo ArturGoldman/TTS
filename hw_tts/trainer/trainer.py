@@ -141,14 +141,15 @@ class Trainer(BaseTrainer):
         with torch.no_grad():
             for i in range(n_examples):
                 batch = next(iter(self.val_data_loader))
+                batch.to(self.device)
                 ground_truth_melspec = self.criterion_fs.melspec(batch.waveform)
                 output = self.model(batch, self.device, self.criterion_fs.melspec, self.galigner)
                 # output: [1, sq_len, 80]
                 pred_wav = self.vocoder.inference(output.transpose(-1, -2)).cpu()
-                true_wav = self.vocoder.inference(ground_truth_melspec.unsqueeze(0).transpose(-1, -2)).cpu()
+                true_wav = self.vocoder.inference(ground_truth_melspec.transpose(-1, -2)).cpu()
 
                 self._log_spectrogram("val_pred", output[0])
-                self._log_spectrogram("val_ground_truth", ground_truth_melspec)
+                self._log_spectrogram("val_ground_truth", ground_truth_melspec[0])
 
                 self._log_audios("val_pred_synth", pred_wav.squeeze())
                 self._log_audios("val_true_synth", true_wav.squeeze())

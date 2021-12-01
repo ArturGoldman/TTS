@@ -88,7 +88,7 @@ class GraphemeAligner(nn.Module):
             """
             num_frames = emission.shape[0]
             norm_durations = [segment.length for segment in segments]
-            durations.append([segments[0].start]+norm_durations+[num_frames-segments[-1].end])
+            durations.append(torch.tensor([segments[0].start]+norm_durations+[num_frames-segments[-1].end]))
 
         #durations = pad_sequence(durations).transpose(0, 1)
         return durations

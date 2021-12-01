@@ -18,7 +18,7 @@ class LJSpeechDataset(torchaudio.datasets.LJSPEECH):
 
     def __getitem__(self, index: int):
         waveform, old_sr, _, transcript = super().__getitem__(self._index[index])
-        waveform = torchaudio.transforms.Resample(old_sr, self.to_sr)
+        waveform = torchaudio.transforms.Resample(old_sr, self.to_sr)(waveform)
         waveform_length = torch.tensor([waveform.shape[-1]]).int()
 
         tokens, token_lengths = self._tokenizer(transcript)

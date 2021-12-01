@@ -156,10 +156,20 @@ class LengthRegulator(nn.Module):
             enlarged = []
             ground_truth_lns = []
             for i in range(y.size(0)):
-                cur_enlargement = torch.repeat_interleave(y[i, :x.token_lengths[i], :], durs[i][1:-1], dim=0)
+                rel_lengths = durs[i]/durs[i].sum()
+                true_ln = melspec(x.waveform[i, :x.waveform_length[i]]).size(0)
+                approx_lns = torch.round(true_ln*rel_lengths).int().to(device)
+                if approx_lns.sum() > true_ln:
+                    approx_lns[-1] = 0
+                    if approx_lns.sum() > true_ln:
+                        approx_lns[0] = 0
+                        if approx_lns.sum() > true_ln:
+                            approx_lns = (true_ln*rel_lengths).int().to(device)
+                cur_enlargement = torch.repeat_interleave(y[i, :x.token_lengths[i], :], approx_lns[1:-1], dim=0)
                 # firstly i want to restore true number of frames for melspec, thus i add zeros
-                true_sz = torch.full((sum(durs[i]), y.size(2)), Batch.pad_value)
-                true_sz[durs[0]:-durs[-1]] = cur_enlargement
+                true_sz = torch.full((true_ln, y.size(2)), Batch.pad_value)
+                true_sz[approx_lns[0]:approx_lns[:-1].sum()] = cur_enlargement
+                ground_truth_lns.append(approx_lns[1:-1])
                 enlarged.append(true_sz)
             enlarged = pad_sequence(enlarged, batch_first=True, padding_value=Batch.pad_value)
             return enlarged, preds.squeeze(-1), ground_truth_lns

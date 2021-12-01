@@ -104,6 +104,7 @@
     "visualize": "wandb",
     "wandb_project": "TTS-HSE-DLA",
     "len_epoch": 200,
+    "log_step": 50,
     "grad_norm_clip": 1
   }
 }
