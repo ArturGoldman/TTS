@@ -9,7 +9,7 @@ Text To Speech HW for DLA HSE course
 
 ## Credits
 Some transformer implementation details are based on 
-[pytorch tutorial and official implementation](https://pytorch.org/tutorials/beginner/translation_transformer.html).
+[pytorch tutorial and official pytorch implementation](https://pytorch.org/tutorials/beginner/translation_transformer.html).
 
 Multihead-Attention is built as described in [this illustrated Transformer tutorial](https://jalammar.github.io/illustrated-transformer/).
 
