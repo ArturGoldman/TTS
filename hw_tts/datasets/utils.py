@@ -35,10 +35,6 @@ def get_dataloaders(configs: ConfigParser):
             bs = params["batch_size"]
             shuffle = True
             batch_sampler = None
-        elif "batch_sampler" in params:
-            batch_sampler = configs.init_obj(params["batch_sampler"], batch_sampler_module,
-                                             data_source=dataset)
-            bs, shuffle = 1, False
         else:
             raise Exception()
 
@@ -50,4 +46,4 @@ def get_dataloaders(configs: ConfigParser):
             batch_sampler=batch_sampler, drop_last=drop_last
         )
         dataloaders[split] = dataloader
-    return dataloaders['train']
+    return dataloaders

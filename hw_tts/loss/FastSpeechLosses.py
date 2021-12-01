@@ -8,10 +8,13 @@ class FTLoss(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.melspec = MelSpectrogram(config)
+        # self.loss = nn.MSELoss()
 
     def __call__(self, outputs: Tensor, batch: Batch):
         # outputs: [batch_sz, seq_len, n_mels]
-        ground_truth_spectrogram = self.melspec(batch.waveform)
+        # ground_truth_spectrogram = self.melspec(batch.waveform)
+        # return self.loss(outputs, ground_truth_spectrogram)
+
         MSE = 0
         for i in range(outputs.size(0)):
             gts = self.melspec(batch.waveform[i, :batch.waveform_length[i]])

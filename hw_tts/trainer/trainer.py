@@ -29,6 +29,7 @@ class Trainer(BaseTrainer):
             config,
             device,
             data_loader,
+            val_data_loader=None,
             lr_scheduler=None,
             len_epoch=None,
             skip_oom=True
@@ -37,6 +38,7 @@ class Trainer(BaseTrainer):
         self.skip_oom = skip_oom
         self.config = config
         self.data_loader = data_loader
+        self.val_data_loader = val_data_loader
         self.criterion_fs = criterion_fs
         self.criterion_dp = criterion_dp
         self.vocoder = Vocoder().to(self.device)
@@ -50,7 +52,7 @@ class Trainer(BaseTrainer):
             self.len_epoch = len_epoch
 
         self.lr_scheduler = lr_scheduler
-        self.log_step = 100
+        self.log_step = 50
         self.galigner = GraphemeAligner().to(self.device)
 
         self.train_metrics = MetricTracker(
@@ -91,7 +93,7 @@ class Trainer(BaseTrainer):
                 else:
                     raise e
             self.train_metrics.update("grad norm", self.get_grad_norm())
-            if batch_idx % self.log_step == 0:
+            if batch_idx % self.log_step == 0 or (batch_idx+1 == self.len_epoch and epoch == self.epochs):
                 self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
                 self.logger.debug(
                     "Train Epoch: {} {} Loss_fs: {:.6f} Loss_dp: {:.6f}".format(
@@ -102,7 +104,7 @@ class Trainer(BaseTrainer):
                     "learning rate", self.lr_scheduler.get_last_lr()[0]
                 )
                 self._log_scalars(self.train_metrics)
-            if batch_idx >= self.len_epoch:
+            if batch_idx+1 >= self.len_epoch:
                 break
 
         self._valid_example()
@@ -119,8 +121,8 @@ class Trainer(BaseTrainer):
         loss_fs = self.criterion_fs(outputs, batch)
         loss_dp = self.criterion_dp(batch, pred_log_len, true_log_len)
 
-        loss_dp.backward(retain_graph=True)
-        loss_fs.backward()
+        loss = loss_fs + loss_dp
+        loss.backward()
         self._clip_grad_norm()
         self.optimizer.step()
         if self.lr_scheduler is not None:
@@ -137,19 +139,16 @@ class Trainer(BaseTrainer):
         """
         self.model.eval()
         with torch.no_grad():
-            for batch in self.data_loader:
-                batch.to(self.device)
+            for i in range(n_examples):
+                batch = next(iter(self.val_data_loader))
+                ground_truth_melspec = self.criterion_fs.melspec(batch.waveform)
                 output = self.model(batch, self.device, self.criterion_fs.melspec, self.galigner)
-                break
+                # output: [1, sq_len, 80]
+                pred_wav = self.vocoder.inference(output.transpose(-1, -2)).cpu()
+                true_wav = self.vocoder.inference(ground_truth_melspec.unsqueeze(0).transpose(-1, -2)).cpu()
 
-            ground_truth_melspec = self.criterion_fs.melspec(batch.waveform)
-
-            for i in range(min(n_examples, output.size(0))):
-                pred_wav = self.vocoder.inference(output[i].unsqueeze(0).transpose(-1, -2)).cpu()
-                true_wav = self.vocoder.inference(ground_truth_melspec[i].unsqueeze(0).transpose(-1, -2)).cpu()
-
-                self._log_spectrogram("val_pred", output[i])
-                self._log_spectrogram("val_ground_truth", ground_truth_melspec[i])
+                self._log_spectrogram("val_pred", output[0])
+                self._log_spectrogram("val_ground_truth", ground_truth_melspec)
 
                 self._log_audios("val_pred_synth", pred_wav.squeeze())
                 self._log_audios("val_true_synth", true_wav.squeeze())

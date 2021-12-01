@@ -27,12 +27,8 @@ np.random.seed(SEED)
 def main(config):
     logger = config.get_logger("train")
 
-
     # setup data_loader instances
-    dataloader = get_dataloaders(config)
-
-    ntoken = len(GraphemeAligner()._labels)
-
+    dataloaders = get_dataloaders(config)
     # build model architecture, then print to console
     model = config.init_obj(config["arch"], module_arch)
     logger.info(model)
@@ -60,7 +56,8 @@ def main(config):
         optimizer,
         config=config,
         device=device,
-        data_loader=dataloader,
+        data_loader=dataloaders["train"],
+        val_data_loader=dataloaders["val"],
         lr_scheduler=lr_scheduler,
         len_epoch=config["trainer"].get("len_epoch", None)
     )

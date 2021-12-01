@@ -5,18 +5,20 @@ import random
 
 class LJSpeechDataset(torchaudio.datasets.LJSPEECH):
 
-    def __init__(self, root, limit=None):
+    def __init__(self, root, to_sr=16000, limit=None):
         super().__init__(root=root)
         self._tokenizer = torchaudio.pipelines.TACOTRON2_GRIFFINLIM_CHAR_LJSPEECH.get_text_processor()
         self._index = list(range(super().__len__()))
         self.limit = limit
+        self.to_sr = to_sr
         if limit is not None:
             random.seed(42)
             random.shuffle(self._index)
             self._index = self._index[:limit]
 
     def __getitem__(self, index: int):
-        waveform, _, _, transcript = super().__getitem__(self._index[index])
+        waveform, old_sr, _, transcript = super().__getitem__(self._index[index])
+        waveform = torchaudio.transforms.Resample(old_sr, self.to_sr)
         waveform_length = torch.tensor([waveform.shape[-1]]).int()
 
         tokens, token_lengths = self._tokenizer(transcript)

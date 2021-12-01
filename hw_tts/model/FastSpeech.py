@@ -156,28 +156,10 @@ class LengthRegulator(nn.Module):
             enlarged = []
             ground_truth_lns = []
             for i in range(y.size(0)):
-                true_mel_sz = melspec(x.waveform[i, :x.waveform_length[i]]).size(-2)
-                cur_lns = (true_mel_sz*durs[i]).to(device)
-                approx_ln = torch.round(cur_lns).int()
-                #prev_sum_ap = approx_ln.sum().item()
-                if approx_ln[1:].sum() > true_mel_sz:
-                    # this method reduces length poorly due to dramatic decrease
-                    # yet, i dont know yet other mathematically correct ways to tackle this
-                    coef = true_mel_sz/approx_ln[1:].sum()
-                    my_pow = 1
-                    while (approx_ln[1:].float()*coef**my_pow).int().sum() > true_mel_sz:
-                        my_pow += 1
-                    approx_ln[1:] = (approx_ln[1:].float()*coef**my_pow).int()
-                #if prev_sum_ap != approx_ln.sum():
-                #    print(approx_ln[0].item(), prev_sum_ap, approx_ln.sum().item(), true_mel_sz)
-                ground_truth_lns.append(approx_ln[1:])
-                cur_enlargement = torch.repeat_interleave(y[i, :x.token_lengths[i], :], approx_ln[1:], dim=0)
+                cur_enlargement = torch.repeat_interleave(y[i, :x.token_lengths[i], :], durs[i][1:-1], dim=0)
                 # firstly i want to restore true number of frames for melspec, thus i add zeros
-                true_sz = torch.full((true_mel_sz, y.size(2)), Batch.pad_value)
-                extra = approx_ln.sum() - true_mel_sz
-                if extra < 0:
-                    extra = 0
-                true_sz[approx_ln[0]-extra:approx_ln.sum()-extra] = cur_enlargement
+                true_sz = torch.full((sum(durs[i]), y.size(2)), Batch.pad_value)
+                true_sz[durs[0]:-durs[-1]] = cur_enlargement
                 enlarged.append(true_sz)
             enlarged = pad_sequence(enlarged, batch_first=True, padding_value=Batch.pad_value)
             return enlarged, preds.squeeze(-1), ground_truth_lns
