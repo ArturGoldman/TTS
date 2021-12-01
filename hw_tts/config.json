@@ -2,7 +2,7 @@
   "name": "default_config",
   "n_gpu": 1,
   "MelSpectrogram": {
-    "sr": 16000,
+    "sr": 22050,
     "win_length": 1024,
     "hop_length": 256,
     "n_fft": 1024,
@@ -37,7 +37,7 @@
           "type": "LJSpeechDataset",
           "args": {
             "root": ".",
-            "to_sr": 16000,
+            "to_sr": 22050,
             "limit": 10
           }
         }
@@ -56,7 +56,7 @@
           "type": "LJSpeechDataset",
           "args": {
             "root": ".",
-            "to_sr": 16000,
+            "to_sr": 22050,
             "limit": 10
           }
         }

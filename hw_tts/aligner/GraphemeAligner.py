@@ -38,9 +38,9 @@ class GraphemeAligner(nn.Module):
         self._labels = torchaudio.pipelines.WAV2VEC2_ASR_BASE_960H.get_labels()
         self._char2index = {c: i for i, c in enumerate(self._labels)}
         self._unk_index = self._char2index['<unk>']
-        #self._resampler = torchaudio.transforms.Resample(
-        #    orig_freq=22_050, new_freq=16_000
-        #)
+        self._resampler = torchaudio.transforms.Resample(
+            orig_freq=22_050, new_freq=16_000
+        )
         # this part expects config["MelSpectrogram"]["sr"] to be equal to 22050
 
     def _decode_text(self, text):
@@ -65,8 +65,7 @@ class GraphemeAligner(nn.Module):
         tot_frames = []
         for index in range(batch_size):
             current_wav = wavs[index, :wav_lengths[index]].unsqueeze(dim=0)
-            # no need in resampler, because LJSpeech is in 16k now
-            # current_wav = self._resampler(current_wav)
+            current_wav = self._resampler(current_wav)
             emission, _ = self._wav2vec2(current_wav)
             emission = emission.log_softmax(dim=-1).squeeze(dim=0).cpu()
 
