@@ -163,7 +163,7 @@ class LengthRegulator(nn.Module):
                 cur_enlargement = torch.repeat_interleave(y[i, :x.token_lengths[i], :], approx_lns[1:-1], dim=0)
                 # firstly i want to restore true number of frames for melspec, thus i add zeros
                 true_sz = torch.full((approx_lns.sum(), y.size(2)), Batch.pad_value)
-                true_sz[approx_lns[0]:approx_lns[-1]] = cur_enlargement
+                true_sz[approx_lns[0]:-approx_lns[-1]] = cur_enlargement
                 ground_truth_lns.append(approx_lns[1:-1])
                 enlarged.append(true_sz)
                 new_lns.append(approx_lns.sum().item())

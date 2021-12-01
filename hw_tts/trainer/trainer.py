@@ -3,6 +3,8 @@ from random import shuffle
 
 import torch
 import torch.nn.functional as F
+import torchaudio.transforms
+import torchvision
 from torch.nn.utils import clip_grad_norm_
 from tqdm import tqdm
 import PIL
@@ -155,8 +157,13 @@ class Trainer(BaseTrainer):
                 ground_truth_melspec = self.criterion_fs.melspec(batch.waveform)
                 output = self.model(batch, self.device, self.criterion_fs.melspec, self.galigner)
                 # output: [1, sq_len, 80]
-                pred_wav = self.vocoder.inference(output.transpose(-1, -2)).cpu()
-                true_wav = self.vocoder.inference(ground_truth_melspec.transpose(-1, -2)).cpu()
+                coef = 22050/16000
+                sz1 = (int(coef*output.size(1)), output.size(-1))
+                sz2 = (int(coef*ground_truth_melspec.size(1)), ground_truth_melspec.size(-1))
+                st_out = torchvision.transforms.Resize(sz1)(output)
+                st_gt = torchvision.transforms.Resize(sz2)(ground_truth_melspec)
+                pred_wav = self.vocoder.inference(st_out.transpose(-1, -2)).cpu()
+                true_wav = self.vocoder.inference(st_gt.transpose(-1, -2)).cpu()
 
                 self._log_spectrogram("val_pred", output[0])
                 self._log_spectrogram("val_ground_truth", ground_truth_melspec[0])
