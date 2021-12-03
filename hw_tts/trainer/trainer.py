@@ -41,6 +41,7 @@ class Trainer(BaseTrainer):
         self.criterion_fs = criterion_fs
         self.criterion_dp = criterion_dp
         self.vocoder = Vocoder().to(self.device)
+        self.attentions = None
 
         if len_epoch is None:
             # epoch-based training
@@ -142,17 +143,30 @@ class Trainer(BaseTrainer):
 
         return loss_fs.item(), loss_dp.item()
 
+    def get_activation(self):
+        def hook(model, input, output):
+            self.attentions = output[1].detach()
+        return hook
+
     def _valid_example(self, n_examples=1):
         """
         see how model works on example
         """
         self.model.eval()
+        self.attentions = None
+
         with torch.no_grad():
             for i in range(n_examples):
                 batch = next(iter(self.val_data_loader))
                 batch.to(self.device)
                 ground_truth_melspec = self.criterion_fs.melspec(batch.waveform)
+
+                # registering hook
+                hndle = self.model.decoder[self.config["arch"]["args"]["nlayers"]-1].mhattention.register_forward_hook(self.get_activation())
+
                 output = self.model(batch, self.device, self.criterion_fs.melspec, self.galigner)
+                hndle.remove()
+                print(self.attentions)
                 # output: [1, sq_len, 80]
                 pred_wav = self.vocoder.inference(output.transpose(-1, -2)).cpu()
                 true_wav = self.vocoder.inference(ground_truth_melspec.transpose(-1, -2)).cpu()

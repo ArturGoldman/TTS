@@ -45,9 +45,11 @@ class Attention(nn.Module):
         Q = self.WQ(x)
         K = self.WK(x)
         V = self.WV(x)
-        Z = nn.functional.softmax(torch.matmul(Q, K.transpose(1, 2))/self.d_hid**0.5, dim=-1)
-        Z = torch.matmul(Z, V)
-        return Z
+        Z_prob = nn.functional.softmax(torch.matmul(Q, K.transpose(1, 2))/self.d_hid**0.5, dim=-1)
+        Z = torch.matmul(Z_prob, V)
+        if self.training:
+            return Z, None
+        return Z, Z_prob
 
 
 class MultiHeadAttention(nn.Module):
@@ -62,11 +64,16 @@ class MultiHeadAttention(nn.Module):
     def forward(self, x):
         # x:[batch, seq_len, emb_sz]
         Zs = []
+        Z_probs = []
         for i in range(self.nhead):
-            Zs.append(self.heads[i](x))
+            Z, Z_prob = self.heads[i](x)
+            Zs.append(Z)
+            Z_probs.append(Z_prob)
         Zs = torch.cat(Zs, dim=-1)
         out = self.combiner(Zs)
-        return nn.ReLU()(out)
+        if self.training:
+            return nn.ReLU()(out), None
+        return nn.ReLU()(out), Z_probs
 
 
 class ConvNet1d(nn.Module):
@@ -104,7 +111,7 @@ class FSFFTBlock(nn.Module):
 
     def forward(self, x):
         # x:[batch, seq_len, emb_sz]
-        out = self.mhattention(x)
+        out, _ = self.mhattention(x)
         if self.pln:
             out = x + self.mhead_norm(out)
         else:

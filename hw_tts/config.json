@@ -30,15 +30,14 @@
   },
   "data": {
     "train": {
-      "batch_size": 10,
+      "batch_size": 32,
       "num_workers": 5,
       "datasets": [
         {
           "type": "LJSpeechDataset",
           "args": {
             "root": ".",
-            "to_sr": 22050,
-            "limit": 10
+            "to_sr": 22050
           }
         }
       ],
@@ -56,8 +55,7 @@
           "type": "LJSpeechDataset",
           "args": {
             "root": ".",
-            "to_sr": 22050,
-            "limit": 10
+            "to_sr": 22050
           }
         }
       ],
@@ -87,23 +85,23 @@
   "lr_scheduler": {
     "type": "OneCycleLR",
     "args": {
-      "steps_per_epoch": 200,
-      "epochs": 25,
+      "steps_per_epoch": 400,
+      "epochs": 50,
       "anneal_strategy": "cos",
       "max_lr": 1e-3,
       "pct_start": 0.2
     }
   },
   "trainer": {
-    "epochs": 25,
+    "epochs": 50,
     "save_dir": "saved/",
-    "save_period": 25,
+    "save_period": 50,
     "verbosity": 2,
     "monitor": "min loss_fs",
     "early_stop": 25,
     "visualize": "wandb",
     "wandb_project": "TTS-HSE-DLA",
-    "len_epoch": 200,
+    "len_epoch": 400,
     "log_step": 50,
     "grad_norm_clip": 1
   }
