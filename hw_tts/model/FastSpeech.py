@@ -73,7 +73,7 @@ class MultiHeadAttention(nn.Module):
         out = self.combiner(Zs)
         if self.training:
             return nn.ReLU()(out), None
-        return nn.ReLU()(out), Z_probs
+        return nn.ReLU()(out), torch.cat(Z_probs, dim=0)
 
 
 class ConvNet1d(nn.Module):

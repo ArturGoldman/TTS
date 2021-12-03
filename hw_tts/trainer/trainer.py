@@ -8,7 +8,7 @@ import PIL
 from torchvision.transforms import ToTensor
 
 from hw_tts.base import BaseTrainer
-from hw_tts.logger.utils import plot_spectrogram_to_buf
+from hw_tts.logger.utils import plot_spectrogram_to_buf, plot_attention_to_buf
 from hw_tts.utils import inf_loop, MetricTracker
 from hw_tts.aligner import Batch, GraphemeAligner
 from hw_tts.model import Vocoder
@@ -166,7 +166,7 @@ class Trainer(BaseTrainer):
 
                 output = self.model(batch, self.device, self.criterion_fs.melspec, self.galigner)
                 hndle.remove()
-                print(self.attentions)
+                self._log_attention()
                 # output: [1, sq_len, 80]
                 pred_wav = self.vocoder.inference(output.transpose(-1, -2)).cpu()
                 true_wav = self.vocoder.inference(ground_truth_melspec.transpose(-1, -2)).cpu()
@@ -199,6 +199,12 @@ class Trainer(BaseTrainer):
     def _log_audios(self, name, audio_example):
         audio = audio_example
         self.writer.add_audio(name, audio, sample_rate=self.config["MelSpectrogram"]["sr"])
+
+    def _log_attention(self):
+        # self.attention is expected to have dims [n_heads, seq_len, seq_len]
+        for i in range(self.attentions.size(0)):
+            image = PIL.Image.open(plot_spectrogram_to_buf(self.attentions[i].cpu()))
+            self.writer.add_image("Attention head {}".format(i+1), (ToTensor()(image)).transpose(-1, -2).flip(-2))
 
     @torch.no_grad()
     def get_grad_norm(self, norm_type=2):
