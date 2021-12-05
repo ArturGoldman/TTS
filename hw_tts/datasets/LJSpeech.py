@@ -1,25 +1,85 @@
 import torch
 import torchaudio
 import random
-from hw_tts.aligner import GraphemeAligner
-from tqdm import tqdm
+import numpy as np
+import re
+from unidecode import unidecode
+
+# alignments and text preprocessing is taken from https://github.com/xcmyz/FastSpeech/blob/master/text/cleaners.py
+_whitespace_re = re.compile(r'\s+')
+
+# List of (regular expression, replacement) pairs for abbreviations:
+_abbreviations = [(re.compile('\\b%s\\.' % x[0], re.IGNORECASE), x[1]) for x in [
+    ('mrs', 'misess'),
+    ('mr', 'mister'),
+    ('dr', 'doctor'),
+    ('st', 'saint'),
+    ('co', 'company'),
+    ('jr', 'junior'),
+    ('maj', 'major'),
+    ('gen', 'general'),
+    ('drs', 'doctors'),
+    ('rev', 'reverend'),
+    ('lt', 'lieutenant'),
+    ('hon', 'honorable'),
+    ('sgt', 'sergeant'),
+    ('capt', 'captain'),
+    ('esq', 'esquire'),
+    ('ltd', 'limited'),
+    ('col', 'colonel'),
+    ('ft', 'fort'),
+]]
+
+
+def expand_abbreviations(text):
+    for regex, replacement in _abbreviations:
+        text = re.sub(regex, replacement, text)
+    return text
+
+
+def lowercase(text):
+    return text.lower()
+
+
+def collapse_whitespace(text):
+    return re.sub(_whitespace_re, ' ', text)
+
+
+def convert_to_ascii(text):
+    return unidecode(text)
+
+
+def basic_cleaners(text):
+    '''Basic pipeline that lowercases and collapses whitespace without transliteration.'''
+    text = lowercase(text)
+    text = collapse_whitespace(text)
+    return text
+
+
+def transliteration_cleaners(text):
+    '''Pipeline for non-English text that transliterates to ASCII.'''
+    text = convert_to_ascii(text)
+    text = lowercase(text)
+    text = collapse_whitespace(text)
+    return text
+
+
+def english_cleaners(text):
+    '''Pipeline for English text, including number and abbreviation expansion.'''
+    text = convert_to_ascii(text)
+    text = lowercase(text)
+    text = expand_abbreviations(text)
+    text = collapse_whitespace(text)
+    return text
 
 
 class LJSpeechDataset(torchaudio.datasets.LJSPEECH):
 
     def __init__(self, root, to_sr=22050, limit=None):
         super().__init__(root=root)
-        self.aligner = GraphemeAligner()
         self._tokenizer = torchaudio.pipelines.TACOTRON2_GRIFFINLIM_CHAR_LJSPEECH.get_text_processor()
-        self._index = []
         cur_sz = super().__len__()
-        for i in tqdm(range(cur_sz), desc="Dataset Filtering", total=cur_sz):
-            _, _, _, transcript = super().__getitem__(i)
-            tokens, token_lengths = self._tokenizer(transcript)
-            tokens_other = self.aligner._decode_text(transcript)
-            if tokens.size(-1) == tokens_other.size(-1):
-                self._index.append(i)
-        print("Old len: {}, new len: {}".format(cur_sz, len(self._index)))
+        self._index = list(range(cur_sz))
         self.limit = limit
         self.to_sr = to_sr
         random.seed(42)
@@ -32,14 +92,19 @@ class LJSpeechDataset(torchaudio.datasets.LJSPEECH):
         waveform = torchaudio.transforms.Resample(old_sr, self.to_sr)(waveform)
         waveform_length = torch.tensor([waveform.shape[-1]]).int()
 
+        transcript = english_cleaners(transcript)
+
         tokens, token_lengths = self._tokenizer(transcript)
 
-        return waveform, waveform_length, transcript, tokens, token_lengths
+        alignment = np.load('./alignments/' + str(self._index[index]) + '.npy')
+
+        return waveform, waveform_length, transcript, tokens, token_lengths, alignment
 
     def __len__(self):
         return len(self._index)
 
     def decode(self, tokens, lengths):
+        # not sure if this works
         result = []
         for tokens_, length in zip(tokens, lengths):
             text = "".join([

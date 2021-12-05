@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from hw_tts.base import BaseTrainer
 from hw_tts.logger.utils import plot_spectrogram_to_buf, plot_attention_to_buf
 from hw_tts.utils import inf_loop, MetricTracker
-from hw_tts.aligner import Batch, GraphemeAligner
+from hw_tts.aligner import Batch
 from hw_tts.model import Vocoder
 
 
@@ -56,7 +56,6 @@ class Trainer(BaseTrainer):
 
         self.lr_scheduler = lr_scheduler
         self.log_step = 50
-        self.galigner = GraphemeAligner().to(self.device)
 
         self.train_metrics = MetricTracker(
             "loss_fs", "loss_dp", "grad norm", writer=self.writer
@@ -123,11 +122,10 @@ class Trainer(BaseTrainer):
     def process_batch(self, batch: Batch, metrics: MetricTracker, to_log: bool):
         batch.to(self.device)
         self.optimizer.zero_grad()
-        outputs, new_lns, pred_log_len, true_log_len = self.model(batch, self.device, self.criterion_fs.melspec,
-                                                                  self.galigner)
+        outputs, pred_log_len = self.model(batch, self.device, self.criterion_fs.melspec)
 
-        loss_fs = self.criterion_fs(outputs, new_lns, batch)
-        loss_dp = self.criterion_dp(batch, pred_log_len, true_log_len)
+        loss_fs = self.criterion_fs(outputs, batch)
+        loss_dp = self.criterion_dp(batch, pred_log_len)
 
         loss = loss_fs + loss_dp
         loss.backward()
@@ -178,7 +176,7 @@ class Trainer(BaseTrainer):
                             self.get_activation(str(t) + str(i)))
                         handles.append(hndle)
 
-                output = self.model(batch, self.device, self.criterion_fs.melspec, self.galigner)
+                output = self.model(batch, self.device, self.criterion_fs.melspec)
 
                 for t in range(2):
                     # going through encoder and decoder

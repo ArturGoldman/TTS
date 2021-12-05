@@ -1,4 +1,5 @@
 torchvision
+unidecode
 numpy
 tqdm
 tensorboard

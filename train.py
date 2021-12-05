@@ -11,7 +11,6 @@ from hw_tts.datasets.utils import get_dataloaders
 from hw_tts.trainer import Trainer
 from hw_tts.utils import prepare_device
 from hw_tts.utils.parse_config import ConfigParser
-from hw_tts.aligner import GraphemeAligner
 from hw_tts.loss import FTLoss
 
 warnings.filterwarnings("ignore", category=UserWarning)

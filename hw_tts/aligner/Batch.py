@@ -1,6 +1,7 @@
 import torch
 from typing import Tuple, Dict, Optional, List, Union
 from dataclasses import dataclass
+import numpy as np
 
 
 @dataclass
@@ -10,6 +11,7 @@ class Batch:
     transcript: List[str]
     tokens: torch.Tensor
     token_lengths: torch.Tensor
+    alignment: List[np.ndarray]
     durations: Optional[torch.Tensor] = None
     pad_value: float = -11.5129251
 

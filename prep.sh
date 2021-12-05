@@ -9,3 +9,6 @@ tar -xjf LJSpeech-1.1.tar.bz2
 
 git clone https://github.com/NVIDIA/waveglow.git
 pip install googledrivedownloader
+
+wget https://github.com/xcmyz/FastSpeech/raw/master/alignments.zip
+unzip -q alignments.zip

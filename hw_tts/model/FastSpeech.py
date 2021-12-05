@@ -152,37 +152,22 @@ class LengthRegulator(nn.Module):
         self.alpha = alpha
         self.dpred = DurationPredictor(d_model, filter_sz, kernel_sz, dropout)
 
-    def forward(self, y, x: Batch, device, melspec, galigner):
+    def forward(self, y, x: Batch, device, melspec):
         # y: encoder output, [batch_sz, seq_ln, emb_sz]
         # x: initial batch with wav info
 
         preds = self.dpred(y)
         # preds: [batch_sz, seq_ln, 1]
         if self.training:
-            durs = galigner(x.waveform, x.waveform_length, x.transcript)
             enlarged = []
-            ground_truth_lns = []
             new_lns = []
             for i in range(y.size(0)):
-                rel_lengths = durs[i]/durs[i].sum()
-                true_ln = melspec(x.waveform[i, :x.waveform_length[i]]).size(0)
-                approx_lns = torch.round(true_ln*rel_lengths).int().to(device)
-                cur_enlargement = torch.repeat_interleave(y[i, :x.token_lengths[i], :], approx_lns[1:-1], dim=0)
+                rel_lengths = torch.from_numpy(x.alignment[i]).to(device)
+                cur_enlargement = torch.repeat_interleave(y[i, :x.token_lengths[i], :], rel_lengths, dim=0)
                 # firstly i want to restore true number of frames for melspec, thus i add zeros
-                true_sz = torch.full((approx_lns.sum(), y.size(2)), Batch.pad_value)
-                try:
-                    true_sz[approx_lns[0]:approx_lns[0]+approx_lns[1:-1].sum()] = cur_enlargement
-                except RuntimeError as e:
-                    print(approx_lns[0], approx_lns[-1])
-                    print(approx_lns)
-                    print(approx_lns.size(), approx_lns[1:-1].sum())
-                    print(cur_enlargement.size())
-                    raise e
-                ground_truth_lns.append(approx_lns[1:-1])
-                enlarged.append(true_sz)
-                new_lns.append(approx_lns.sum().item())
+                enlarged.append(rel_lengths)
             enlarged = pad_sequence(enlarged, batch_first=True, padding_value=0.)
-            return enlarged, new_lns, preds.squeeze(-1), ground_truth_lns
+            return enlarged, preds.squeeze(-1)
 
         else:
             lns = torch.round(self.alpha * torch.exp(preds)).int().squeeze(-1)
@@ -192,7 +177,7 @@ class LengthRegulator(nn.Module):
                     torch.repeat_interleave(y[i, :x.token_lengths[i], :], lns[i, :x.token_lengths[i]], dim=0))
             enlarged = pad_sequence(enlarged, batch_first=True, padding_value=Batch.pad_value)
 
-            return enlarged, None, None, None
+            return enlarged, None
 
 
 class FastSpeech(nn.Module):
@@ -236,14 +221,14 @@ class FastSpeech(nn.Module):
         out = self.phon_pos_enc(out)
         out = self.encoder(out)
 
-        out, new_lns, pred_log_len, true_log_len = self.length_regulator(out, x, device, melspec, galigner)
+        out, pred_log_len = self.length_regulator(out, x, device, melspec, galigner)
 
         out = self.mult_pos_enc(out.to(device))
         out = self.decoder(out)
         out = self.predictor(out)
 
         if self.training:
-            return out, new_lns, pred_log_len, true_log_len
+            return out, pred_log_len
 
         return out
 

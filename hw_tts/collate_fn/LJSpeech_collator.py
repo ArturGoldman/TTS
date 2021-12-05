@@ -10,7 +10,7 @@ from hw_tts.aligner import Batch
 class LJSpeechCollator:
 
     def __call__(self, instances: List[Tuple]) -> Dict:
-        waveform, waveform_length, transcript, tokens, token_lengths = list(
+        waveform, waveform_length, transcript, tokens, token_lengths, alignment = list(
             zip(*instances)
         )
 
@@ -24,4 +24,4 @@ class LJSpeechCollator:
         ]).transpose(0, 1)
         token_lengths = torch.cat(token_lengths)
 
-        return Batch(waveform, waveform_length, transcript, tokens, token_lengths)
+        return Batch(waveform, waveform_length, transcript, tokens, token_lengths, alignment)
