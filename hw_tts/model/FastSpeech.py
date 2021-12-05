@@ -25,10 +25,12 @@ class PositionalEncoding(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         """
         Args:
-            x: Tensor, shape [seq_len, batch_size, embedding_dim]
+            x: Tensor, shape [seq_len, batch_size, embedding_dim] expected
+            but ours is of size([batch_size, seq_len, embedding_dim])
         """
+        x = x.transpose(0, 1)
         x = x + self.pe[:x.size(0)]
-        return self.dropout(x)
+        return self.dropout(x.transpose(0, 1))
 
 
 class Attention(nn.Module):
@@ -45,7 +47,7 @@ class Attention(nn.Module):
         Q = self.WQ(x)
         K = self.WK(x)
         V = self.WV(x)
-        Z_prob = nn.functional.softmax(torch.matmul(Q, K.transpose(1, 2))/self.d_hid**0.5, dim=-1)
+        Z_prob = nn.functional.softmax(torch.matmul(Q, K.transpose(1, 2)) / self.d_hid ** 0.5, dim=-1)
         Z = torch.matmul(Z_prob, V)
         if self.training:
             return Z, None
@@ -58,7 +60,7 @@ class MultiHeadAttention(nn.Module):
         self.heads = nn.ModuleList()
         for i in range(nhead):
             self.heads.append(Attention(d_model, d_hid))
-        self.combiner = nn.Linear(nhead*d_hid, d_model, bias=False)
+        self.combiner = nn.Linear(nhead * d_hid, d_model, bias=False)
         self.nhead = nhead
 
     def forward(self, x):
@@ -77,7 +79,7 @@ class MultiHeadAttention(nn.Module):
 
 
 class ConvNet1d(nn.Module):
-    def __init__(self, d_model: int, d_hid_ker:int, kernel_sz: int):
+    def __init__(self, d_model: int, d_hid_ker: int, kernel_sz: int):
         # two layered convnet from paper
         super().__init__()
         convs = []
@@ -115,14 +117,14 @@ class FSFFTBlock(nn.Module):
         if self.pln:
             out = x + self.mhead_norm(out)
         else:
-            out = self.mhead_norm(x+out)
+            out = self.mhead_norm(x + out)
         out = self.dropout(out)
 
         out_sec = self.convnet(out)
         if self.pln:
             out = out + self.mhead_norm(out_sec)
         else:
-            out = self.mhead_norm(out+out_sec)
+            out = self.mhead_norm(out + out_sec)
         out = self.dropout(out)
         return out
 
@@ -165,17 +167,16 @@ class LengthRegulator(nn.Module):
                 rel_lengths = torch.from_numpy(x.alignment[i]).to(device)
                 cur_enlargement = torch.repeat_interleave(y[i, :x.token_lengths[i], :], rel_lengths, dim=0)
                 # firstly i want to restore true number of frames for melspec, thus i add zeros
-                enlarged.append(rel_lengths)
+                enlarged.append(cur_enlargement)
             enlarged = pad_sequence(enlarged, batch_first=True, padding_value=0.)
             return enlarged, preds.squeeze(-1)
-
         else:
             lns = torch.round(self.alpha * torch.exp(preds)).int().squeeze(-1)
             enlarged = []
             for i in range(y.size(0)):
                 enlarged.append(
                     torch.repeat_interleave(y[i, :x.token_lengths[i], :], lns[i, :x.token_lengths[i]], dim=0))
-            enlarged = pad_sequence(enlarged, batch_first=True, padding_value=Batch.pad_value)
+            enlarged = pad_sequence(enlarged, batch_first=True, padding_value=0.)
 
             return enlarged, None
 
@@ -214,15 +215,14 @@ class FastSpeech(nn.Module):
 
         self.predictor = nn.Linear(d_model, n_mels)
 
-    def forward(self, x: Batch, device: torch.device, melspec: nn.Module, galigner: nn.Module):
+    def forward(self, x: Batch, device: torch.device, melspec: nn.Module):
         # x: Batch class.
         # x.tokens: [batch_sz, seq_ln]
-        out = self.phoneme_embedding(x.tokens) * self.d_model**0.5
+        out = self.phoneme_embedding(x.tokens) * self.d_model ** 0.5
         out = self.phon_pos_enc(out)
         out = self.encoder(out)
 
-        out, pred_log_len = self.length_regulator(out, x, device, melspec, galigner)
-
+        out, pred_log_len = self.length_regulator(out, x, device, melspec)
         out = self.mult_pos_enc(out.to(device))
         out = self.decoder(out)
         out = self.predictor(out)
