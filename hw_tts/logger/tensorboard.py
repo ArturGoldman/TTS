@@ -25,7 +25,7 @@ class TensorboardWriter:
                 message = (
                     "Warning: visualization (Tensorboard) is configured to use, but currently not installed on "
                     "this machine. Please install TensorboardX with 'pip install tensorboardx', upgrade PyTorch to "
-                    "version >= 1.1 to use 'torch.utils.tensorboard' or turn off the option in the 'config.json' file."
+                    "version >= 1.1 to use 'torch.utils.tensorboard' or turn off the option in the 'config_small.json' file."
                 )
                 logger.warning(message)
 

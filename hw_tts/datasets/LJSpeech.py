@@ -1,19 +1,30 @@
 import torch
 import torchaudio
 import random
+from hw_tts.aligner import GraphemeAligner
+from tqdm import tqdm
 
 
 class LJSpeechDataset(torchaudio.datasets.LJSPEECH):
 
-    def __init__(self, root, to_sr=16000, limit=None):
+    def __init__(self, root, to_sr=22050, limit=None):
         super().__init__(root=root)
+        self.aligner = GraphemeAligner()
         self._tokenizer = torchaudio.pipelines.TACOTRON2_GRIFFINLIM_CHAR_LJSPEECH.get_text_processor()
-        self._index = list(range(super().__len__()))
+        self._index = []
+        cur_sz = super().__len__()
+        for i in tqdm(range(cur_sz), desc="Dataset Filtering", total=cur_sz):
+            _, _, _, transcript = super().__getitem__(i)
+            tokens, token_lengths = self._tokenizer(transcript)
+            tokens_other = self.aligner._decode_text(transcript)
+            if tokens.size(-1) == tokens_other.size(-1):
+                self._index.append(i)
+        print("Old len: {}, new len: {}".format(cur_sz, len(self._index)))
         self.limit = limit
         self.to_sr = to_sr
+        random.seed(42)
+        random.shuffle(self._index)
         if limit is not None:
-            random.seed(42)
-            random.shuffle(self._index)
             self._index = self._index[:limit]
 
     def __getitem__(self, index: int):
@@ -26,9 +37,7 @@ class LJSpeechDataset(torchaudio.datasets.LJSPEECH):
         return waveform, waveform_length, transcript, tokens, token_lengths
 
     def __len__(self):
-        if self.limit is None:
-            return super().__len__()
-        return self.limit
+        return len(self._index)
 
     def decode(self, tokens, lengths):
         result = []

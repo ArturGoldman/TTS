@@ -35,9 +35,9 @@ class Attention(nn.Module):
     # based on https://jalammar.github.io/illustrated-transformer/
     def __init__(self, d_model: int, d_hid: int):
         super().__init__()
-        self.WQ = nn.Linear(d_model, d_hid)
-        self.WK = nn.Linear(d_model, d_hid)
-        self.WV = nn.Linear(d_model, d_hid)
+        self.WQ = nn.Linear(d_model, d_hid, bias=False)
+        self.WK = nn.Linear(d_model, d_hid, bias=False)
+        self.WV = nn.Linear(d_model, d_hid, bias=False)
         self.d_hid = d_hid
 
     def forward(self, x):
@@ -58,7 +58,7 @@ class MultiHeadAttention(nn.Module):
         self.heads = nn.ModuleList()
         for i in range(nhead):
             self.heads.append(Attention(d_model, d_hid))
-        self.combiner = nn.Linear(nhead*d_hid, d_model)
+        self.combiner = nn.Linear(nhead*d_hid, d_model, bias=False)
         self.nhead = nhead
 
     def forward(self, x):
@@ -170,7 +170,14 @@ class LengthRegulator(nn.Module):
                 cur_enlargement = torch.repeat_interleave(y[i, :x.token_lengths[i], :], approx_lns[1:-1], dim=0)
                 # firstly i want to restore true number of frames for melspec, thus i add zeros
                 true_sz = torch.full((approx_lns.sum(), y.size(2)), Batch.pad_value)
-                true_sz[approx_lns[0]:-approx_lns[-1]] = cur_enlargement
+                try:
+                    true_sz[approx_lns[0]:approx_lns[0]+approx_lns[1:-1].sum()] = cur_enlargement
+                except RuntimeError as e:
+                    print(approx_lns[0], approx_lns[-1])
+                    print(approx_lns)
+                    print(approx_lns.size(), approx_lns[1:-1].sum())
+                    print(cur_enlargement.size())
+                    raise e
                 ground_truth_lns.append(approx_lns[1:-1])
                 enlarged.append(true_sz)
                 new_lns.append(approx_lns.sum().item())

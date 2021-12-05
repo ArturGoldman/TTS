@@ -14,7 +14,7 @@ def plot_spectrogram_to_buf(spectrogram_tensor, name=None):
 
 
 def plot_attention_to_buf(attention_tensor, name=None):
-    plt.figure(figsize=(15, 15))
+    plt.figure(figsize=(20, 20))
     plt.imshow(attention_tensor)
     plt.title(name)
     buf = io.BytesIO()

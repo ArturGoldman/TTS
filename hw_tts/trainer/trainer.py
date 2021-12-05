@@ -7,6 +7,9 @@ from tqdm import tqdm
 import PIL
 from torchvision.transforms import ToTensor
 
+import io
+import matplotlib.pyplot as plt
+
 from hw_tts.base import BaseTrainer
 from hw_tts.logger.utils import plot_spectrogram_to_buf, plot_attention_to_buf
 from hw_tts.utils import inf_loop, MetricTracker
@@ -120,7 +123,8 @@ class Trainer(BaseTrainer):
     def process_batch(self, batch: Batch, metrics: MetricTracker, to_log: bool):
         batch.to(self.device)
         self.optimizer.zero_grad()
-        outputs, new_lns, pred_log_len, true_log_len = self.model(batch, self.device, self.criterion_fs.melspec, self.galigner)
+        outputs, new_lns, pred_log_len, true_log_len = self.model(batch, self.device, self.criterion_fs.melspec,
+                                                                  self.galigner)
 
         loss_fs = self.criterion_fs(outputs, new_lns, batch)
         loss_dp = self.criterion_dp(batch, pred_log_len, true_log_len)
@@ -133,7 +137,7 @@ class Trainer(BaseTrainer):
             self.lr_scheduler.step()
 
         if to_log:
-            j = random.randint(0, outputs.size(0)-1)
+            j = random.randint(0, outputs.size(0) - 1)
             ground_truth_melspec = self.criterion_fs.melspec(batch.waveform)
             self._log_spectrogram("train_pred", outputs[j].detach())
             self._log_spectrogram("train_ground_truth", ground_truth_melspec[j])
@@ -143,9 +147,10 @@ class Trainer(BaseTrainer):
 
         return loss_fs.item(), loss_dp.item()
 
-    def get_activation(self):
+    def get_activation(self, ind):
         def hook(model, input, output):
-            self.attentions = output[1].detach()
+            self.attentions[ind] = output[1].detach()
+
         return hook
 
     def _valid_example(self, n_examples=1):
@@ -153,7 +158,7 @@ class Trainer(BaseTrainer):
         see how model works on example
         """
         self.model.eval()
-        self.attentions = None
+        self.attentions = {}
 
         with torch.no_grad():
             for i in range(n_examples):
@@ -161,12 +166,36 @@ class Trainer(BaseTrainer):
                 batch.to(self.device)
                 ground_truth_melspec = self.criterion_fs.melspec(batch.waveform)
 
-                # registering hook
-                hndle = self.model.decoder[self.config["arch"]["args"]["nlayers"]-1].mhattention.register_forward_hook(self.get_activation())
+                # registering hook and logging attention
+                plt.figure(figsize=(15, 75))
+                handles = []
+                MH_blocks = self.config["arch"]["args"]["nlayers"]
+                at_lyrs = self.config["arch"]["args"]["nhead"]
+                for t in range(2):
+                    # going through encoder and decoder
+                    for i in range(MH_blocks):
+                        hndle = self.model.decoder[i].mhattention.register_forward_hook(
+                            self.get_activation(str(t) + str(i)))
+                        handles.append(hndle)
 
                 output = self.model(batch, self.device, self.criterion_fs.melspec, self.galigner)
-                hndle.remove()
-                self._log_attention()
+
+                for t in range(2):
+                    # going through encoder and decoder
+                    block_name = "encoder"
+                    if t == 1:
+                        block_name = "decoder"
+                    for i in range(MH_blocks):
+                        for j in range(at_lyrs):
+                            plt.subplot2grid((2 * MH_blocks, at_lyrs), (MH_blocks * t + i, j))
+                            plt.imshow(self.attentions[str(t) + str(i)][j].cpu())
+                            plt.title("{}, block {}, AtHead {}".format(block_name, i + 1, j + 1))
+                        handles[t * MH_blocks + i].remove()
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png')
+                buf.seek(0)
+
+                self._log_attention(buf)
                 # output: [1, sq_len, 80]
                 pred_wav = self.vocoder.inference(output.transpose(-1, -2)).cpu()
                 true_wav = self.vocoder.inference(ground_truth_melspec.transpose(-1, -2)).cpu()
@@ -200,11 +229,9 @@ class Trainer(BaseTrainer):
         audio = audio_example
         self.writer.add_audio(name, audio, sample_rate=self.config["MelSpectrogram"]["sr"])
 
-    def _log_attention(self):
-        # self.attention is expected to have dims [n_heads, seq_len, seq_len]
-        for i in range(self.attentions.size(0)):
-            image = PIL.Image.open(plot_spectrogram_to_buf(self.attentions[i].cpu()))
-            self.writer.add_image("Attention head {}".format(i+1), (ToTensor()(image)).transpose(-1, -2).flip(-2))
+    def _log_attention(self, buf):
+        image = PIL.Image.open(buf).rotate(270, expand=True)
+        self.writer.add_image("Attentions", (ToTensor()(image)).transpose(-1, -2).flip(-2))
 
     @torch.no_grad()
     def get_grad_norm(self, norm_type=2):
