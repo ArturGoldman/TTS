@@ -259,9 +259,12 @@ class FastSpeech(nn.Module):
         # x: Batch class.
         # x.tokens: [batch_sz, seq_ln]
 
-        mask = torch.zeros(x.tokens.size()).to(device)
-        for i in range(x.tokens.size(0)):
-            mask[i, :x.token_lengths[i]] = 1
+        if self.training:
+            mask = torch.zeros(x.tokens.size()).to(device)
+            for i in range(x.tokens.size(0)):
+                mask[i, :x.token_lengths[i]] = 1
+        else:
+            mask = torch.ones(x.tokens.size()).to(device)
 
         out = self.phoneme_embedding(x.tokens) * self.d_model ** 0.5
         out = self.phon_pos_enc(out)
@@ -271,10 +274,12 @@ class FastSpeech(nn.Module):
         out, pred_log_len = self.length_regulator(out, x, device)
         out = self.mult_pos_enc(out.to(device))
 
-        mask = torch.zeros(out.size()[:2]).to(device)
-        for i in range(out.size(0)):
-            mask[i, :x.alignment[i].sum()] = 1
-
+        if self.training:
+            mask = torch.zeros(out.size()[:2]).to(device)
+            for i in range(out.size(0)):
+                mask[i, :x.alignment[i].sum()] = 1
+        else:
+            mask = torch.ones(out.size()[:2]).to(device)
         for elem in self.decoder:
             out = elem(out, mask)
 

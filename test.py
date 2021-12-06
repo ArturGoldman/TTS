@@ -12,12 +12,13 @@ from hw_tts.utils import ROOT_PATH
 from hw_tts.utils.parse_config import ConfigParser
 from hw_tts.datasets import english_cleaners
 from hw_tts.model import Vocoder
+from hw_tts.aligner import Batch
 
 DEFAULT_TEST_CONFIG_PATH = ROOT_PATH / "default_test_config.json"
 DEFAULT_CHECKPOINT_PATH = ROOT_PATH / "default_test_model" / "checkpoint.pth"
 
 
-def main(config, out_file):
+def main(config):
     logger = config.get_logger("test")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -47,12 +48,15 @@ def main(config, out_file):
     vocoder = Vocoder().to(device)
 
     f = open(config["file_dir"], 'r')
-    for i, line in enumerate(f.readlines()):
+    for i, line in tqdm(enumerate(f.readlines())):
         transcript = english_cleaners(line)
         tokens, token_lengths = tokenizer(transcript)
-        spec_pred = model(tokens.to(device))
+        batch = Batch(None, None, None, tokens.to(device), token_lengths.to(device), None)
+        spec_pred = model(batch, device)
         pred_wav = vocoder.inference(spec_pred.transpose(-1, -2)).cpu()
-        torchaudio.save(str(save_path)+'/'+str(i+1)+'.wav', pred_wav, sr=22050)
+        torchaudio.save(str(save_path)+'/'+str(i+1)+'.wav', pred_wav, sample_rate=22050)
+
+    print("Testing: DONE")
 
 
 if __name__ == "__main__":
@@ -81,4 +85,4 @@ if __name__ == "__main__":
 
     config = ConfigParser.from_args(args)
 
-    main(config, args.output)
+    main(config)
