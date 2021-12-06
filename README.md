@@ -25,7 +25,7 @@ If you want to start training process from the start run
 ```
 !python3 ./TTS/train.py -c ./TTS/hw_tts/config.json
 ```
-Note that after training you will have to pass trained model to test on your own. See `test.sh`.
+Note that after training you will have to pass trained model to test on your own. See `test.sh`. Training was performed using `config.json`, `config2.json`, `config3.json`.
 
 ## Results
 ~~ Under construction ~~
