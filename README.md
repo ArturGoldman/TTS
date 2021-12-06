@@ -28,10 +28,18 @@ If you want to start training process from the start run
 Note that after training you will have to pass trained model to test on your own. See `test.sh`. Training was performed using `config.json`, `config2.json`, `config3.json`.
 
 ## Results
-~~ Under construction ~~
+Model didn't converge :(
+
+Details of training can be found here: https://wandb.ai/artgoldman/TTS-HSE-DLA
+
+MelSpectrograms appear blurry, thus synthesised wav sounds like a robot with cracking.
 
 ## Implementation details
-~~ Under construction ~~
+For stable Transformer training some details were implemented, which are:
+- Pre Layer Norm
+- SmallInit weight initialisation from [this tutorial](https://tnq177.github.io/data/transformers_without_tears.pdf)
+- Lr warmup with OneCycle cos annealing
+- Masked MultiHeadAttention mechanism from [this tutorial](https://uvadlc-notebooks.readthedocs.io/en/latest/tutorial_notebooks/tutorial6/Transformers_and_MHAttention.html)
 
 ## Credits
 Some transformer implementation details are based on 
