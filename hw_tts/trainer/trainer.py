@@ -36,7 +36,7 @@ class Trainer(BaseTrainer):
             len_epoch=None,
             skip_oom=True
     ):
-        super().__init__(model, optimizer, config, device)
+        super().__init__(model, optimizer, lr_scheduler, config, device)
         self.skip_oom = skip_oom
         self.config = config
         self.data_loader = data_loader
@@ -122,7 +122,7 @@ class Trainer(BaseTrainer):
     def process_batch(self, batch: Batch, metrics: MetricTracker, to_log: bool):
         batch.to(self.device)
         self.optimizer.zero_grad()
-        outputs, pred_log_len = self.model(batch, self.device, self.criterion_fs.melspec)
+        outputs, pred_log_len = self.model(batch, self.device)
 
         loss_fs = self.criterion_fs(outputs, batch)
         loss_dp = self.criterion_dp(batch, pred_log_len)
@@ -176,7 +176,7 @@ class Trainer(BaseTrainer):
                             self.get_activation(str(t) + str(i)))
                         handles.append(hndle)
 
-                output = self.model(batch, self.device, self.criterion_fs.melspec)
+                output = self.model(batch, self.device)
 
                 for t in range(2):
                     # going through encoder and decoder

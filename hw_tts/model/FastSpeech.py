@@ -33,6 +33,7 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x.transpose(0, 1))
 
 
+"""
 class Attention(nn.Module):
     # based on https://jalammar.github.io/illustrated-transformer/
     def __init__(self, d_model: int, d_hid: int):
@@ -42,40 +43,67 @@ class Attention(nn.Module):
         self.WV = nn.Linear(d_model, d_hid, bias=False)
         self.d_hid = d_hid
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         # x: [batch, seq_len, emb_sz]
         Q = self.WQ(x)
         K = self.WK(x)
         V = self.WV(x)
-        Z_prob = nn.functional.softmax(torch.matmul(Q, K.transpose(1, 2)) / self.d_hid ** 0.5, dim=-1)
+        Z_pred = torch.matmul(Q, K.transpose(1, 2)) / self.d_hid ** 0.5
+        if mask is not None:
+            Z_pred = Z_pred.masked_fill(mask == 0, -9e15)
+        Z_prob = nn.functional.softmax(Z_pred, dim=-1)
         Z = torch.matmul(Z_prob, V)
         if self.training:
             return Z, None
         return Z, Z_prob
+"""
 
 
 class MultiHeadAttention(nn.Module):
+    # based on https://uvadlc-notebooks.readthedocs.io/en/latest/tutorial_notebooks/tutorial6/Transformers_and_MHAttention.html
     def __init__(self, d_model: int, nhead: int, d_hid: int):
         super().__init__()
-        self.heads = nn.ModuleList()
-        for i in range(nhead):
-            self.heads.append(Attention(d_model, d_hid))
-        self.combiner = nn.Linear(nhead * d_hid, d_model, bias=False)
+        assert d_model % nhead == 0
+        self.QKV = nn.Linear(d_model, 3 * d_hid, bias=False)
+        self.combiner = nn.Linear(d_hid, d_model, bias=False)
         self.nhead = nhead
+        self.h_dim = d_model // nhead
+        self.d_hid = d_hid
+        self.initialise_weights()
 
-    def forward(self, x):
+    def initialise_weights(self):
+        gain = (2/5)**0.5
+        nn.init.xavier_normal_(self.QKV.weight, gain)
+        nn.init.xavier_normal_(self.combiner.weight, gain)
+
+    @staticmethod
+    def calc_attention(Q, K, V, mask=None):
+        d_k = Q.size(-1)
+        Z_pred = torch.matmul(Q, K.transpose(-1, -2)) / d_k ** 0.5
+        if mask is not None:
+            Z_pred = Z_pred.masked_fill((mask == 0)[:, None, None, :], -9e15)
+        Z_prob = nn.functional.softmax(Z_pred, dim=-1)
+        Z = torch.matmul(Z_prob, V)
+        return Z, Z_prob
+
+    def forward(self, x, mask=None):
         # x:[batch, seq_len, emb_sz]
-        Zs = []
-        Z_probs = []
-        for i in range(self.nhead):
-            Z, Z_prob = self.heads[i](x)
-            Zs.append(Z)
-            Z_probs.append(Z_prob)
-        Zs = torch.cat(Zs, dim=-1)
-        out = self.combiner(Zs)
+        b_sz, seq_ln, emb_sz = x.size()
+        QKV = self.QKV(x)
+
+        # now we want [b_sz, seq_len, 3*emb_sz] -> [b_sz, n_head, seq_ln, 3*(emb_sz//n_head)]
+        QKV = QKV.reshape(b_sz, seq_ln, self.nhead, 3 * self.h_dim).permute(0, 2, 1, 3)
+        Q, K, V = QKV.chunk(3, dim=-1)
+
+        vals, attnt = self.calc_attention(Q, K, V, mask)
+        vals = vals.permute(0, 2, 1, 3).reshape(b_sz, seq_ln, self.d_hid)
+        out = self.combiner(vals)
+
         if self.training:
             return nn.ReLU()(out), None
-        return nn.ReLU()(out), torch.cat(Z_probs, dim=0)
+        # attnt is of size [batch_sz, n_head, seq_len, seq_len]
+        # for batch_sz=1 output [ n_head, seq_len, seq_len] is expected
+        return nn.ReLU()(out), attnt.transpose(0, 1).squeeze()
 
 
 class ConvNet1d(nn.Module):
@@ -87,11 +115,23 @@ class ConvNet1d(nn.Module):
         convs.append(nn.ReLU())
         convs.append(nn.Conv1d(d_hid_ker, d_model, kernel_sz, padding='same'))
         convs.append(nn.ReLU())
-        self.net = nn.Sequential(*convs)
+        self.net = nn.ModuleList(convs)
+        self.init_weights()
+
+    def init_weights(self):
+        gain = (2 / 5) ** 0.5
+        nn.init.xavier_normal_(self.net[0].weight, gain)
+        if self.net[0].bias is not None:
+            nn.init.zeros_(self.net[0].bias)
+        nn.init.xavier_normal_(self.net[2].weight, gain)
+        if self.net[2].bias is not None:
+            nn.init.zeros_(self.net[2].bias)
 
     def forward(self, x):
         # x: [batch, sq_len, emb_sz]
-        out = self.net(x.transpose(1, 2))
+        out = x.transpose(1, 2)
+        for elem in self.net:
+            out = elem(out)
         return out.transpose(1, 2)
 
 
@@ -108,12 +148,12 @@ class FSFFTBlock(nn.Module):
         self.conv_norm = torch.nn.LayerNorm(d_model)
         self.pln = pre_layer_norm
 
-        # TODO: все такой какой норм, инстанс или лейер. надо поправить здесь и в другом месте
+        # TODO: все таки какой норм, инстанс или лейер. надо поправить здесь и в другом месте
         # Пока сделал как в реализации трансформера торчовской
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
         # x:[batch, seq_len, emb_sz]
-        out, _ = self.mhattention(x)
+        out, _ = self.mhattention(x, mask)
         if self.pln:
             out = x + self.mhead_norm(out)
         else:
@@ -122,9 +162,9 @@ class FSFFTBlock(nn.Module):
 
         out_sec = self.convnet(out)
         if self.pln:
-            out = out + self.mhead_norm(out_sec)
+            out = out + self.conv_norm(out_sec)
         else:
-            out = self.mhead_norm(out + out_sec)
+            out = self.conv_norm(out + out_sec)
         out = self.dropout(out)
         return out
 
@@ -154,7 +194,7 @@ class LengthRegulator(nn.Module):
         self.alpha = alpha
         self.dpred = DurationPredictor(d_model, filter_sz, kernel_sz, dropout)
 
-    def forward(self, y, x: Batch, device, melspec):
+    def forward(self, y, x: Batch, device):
         # y: encoder output, [batch_sz, seq_ln, emb_sz]
         # x: initial batch with wav info
 
@@ -185,7 +225,7 @@ class FastSpeech(nn.Module):
 
     def __init__(self, ntoken: int, d_model: int, nhead: int, d_hid: int,
                  kernel_sz: int, filter_sz: int, dur_pred_filter_sz: int,
-                 nlayers: int, n_mels: int, dropout: float = 0.5, phon_max: int = 5000, frame_max: int = 5000,
+                 nlayers: int, n_mels: int, dropout: float = 0.5, phon_max: int = 300, frame_max: int = 5000,
                  alpha: float = 1.0):
         # phon_max: maximum length of phoneme input
         # frame_max: maximum length of frames after length regulator
@@ -202,7 +242,7 @@ class FastSpeech(nn.Module):
         first_half = []
         for i in range(nlayers):
             first_half.append(FSFFTBlock(d_model, nhead, d_hid, kernel_sz, filter_sz, dropout))
-        self.encoder = nn.Sequential(*first_half)
+        self.encoder = nn.ModuleList(first_half)
 
         self.length_regulator = LengthRegulator(d_model, dur_pred_filter_sz, kernel_sz, dropout, alpha)
 
@@ -211,20 +251,33 @@ class FastSpeech(nn.Module):
         sec_half = []
         for i in range(nlayers):
             sec_half.append(FSFFTBlock(d_model, nhead, d_hid, kernel_sz, filter_sz, dropout))
-        self.decoder = nn.Sequential(*sec_half)
+        self.decoder = nn.ModuleList(sec_half)
 
         self.predictor = nn.Linear(d_model, n_mels)
 
-    def forward(self, x: Batch, device: torch.device, melspec: nn.Module):
+    def forward(self, x: Batch, device: torch.device):
         # x: Batch class.
         # x.tokens: [batch_sz, seq_ln]
+
+        mask = torch.zeros(x.tokens.size()).to(device)
+        for i in range(x.tokens.size(0)):
+            mask[i, :x.token_lengths[i]] = 1
+
         out = self.phoneme_embedding(x.tokens) * self.d_model ** 0.5
         out = self.phon_pos_enc(out)
-        out = self.encoder(out)
+        for elem in self.encoder:
+            out = elem(out, mask)
 
-        out, pred_log_len = self.length_regulator(out, x, device, melspec)
+        out, pred_log_len = self.length_regulator(out, x, device)
         out = self.mult_pos_enc(out.to(device))
-        out = self.decoder(out)
+
+        mask = torch.zeros(out.size()[:2]).to(device)
+        for i in range(out.size(0)):
+            mask[i, :x.alignment[i].sum()] = 1
+
+        for elem in self.decoder:
+            out = elem(out, mask)
+
         out = self.predictor(out)
 
         if self.training:

@@ -24,7 +24,7 @@ class FTLoss(nn.Module):
 class DPLoss(nn.Module):
     def __init__(self):
         super().__init__()
-        self.eps = 1e-12
+        self.eps = 1/2
 
     def __call__(self, batch: Batch, pred: Tensor):
         # pred: [batch_sz, lens], lens are not compatible with gt

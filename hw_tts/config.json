@@ -86,7 +86,7 @@
     "type": "OneCycleLR",
     "args": {
       "steps_per_epoch": 400,
-      "epochs": 50,
+      "epochs": 200,
       "anneal_strategy": "cos",
       "max_lr": 1e-3,
       "pct_start": 0.2
@@ -95,7 +95,7 @@
   "trainer": {
     "epochs": 50,
     "save_dir": "saved/",
-    "save_period": 50,
+    "save_period": 25,
     "verbosity": 2,
     "monitor": "min loss_fs",
     "early_stop": 25,
@@ -103,6 +103,6 @@
     "wandb_project": "TTS-HSE-DLA",
     "len_epoch": 400,
     "log_step": 50,
-    "grad_norm_clip": 1
+    "grad_norm_clip": 10
   }
 }
