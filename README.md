@@ -37,7 +37,8 @@ Note that after training you will have to pass trained model to test on your own
 Some transformer implementation details are based on 
 [pytorch tutorial and official pytorch implementation](https://pytorch.org/tutorials/beginner/translation_transformer.html).
 
-Multihead-Attention is built as described in [this illustrated Transformer tutorial](https://jalammar.github.io/illustrated-transformer/).
+Multihead-Attention is built as described in [this illustrated Transformer tutorial](https://jalammar.github.io/illustrated-transformer/) and 
+[this tutorial](https://uvadlc-notebooks.readthedocs.io/en/latest/tutorial_notebooks/tutorial6/Transformers_and_MHAttention.html).
 
 Structure of this repository is based on [template repository of first ASR homework](https://github.com/WrathOfGrapes/asr_project_template),
 which itself is based on a heavily modified fork
