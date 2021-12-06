@@ -19,7 +19,7 @@ To start testing run
 ```
 
 By default training sentences are specified in `sentences.txt`. If you want to pass you own file with sentences,
-place it in the same directory and provide path to it in `config_test.sh`. Then, execute commands above.
+place it in the same directory and provide path to it in `config_test.json` under 'file_dir' field. Then, execute commands above.
 
 If you want to start training process from the start run
 ```
