@@ -7,7 +7,7 @@ All commands are written as if they are executed in Google Colab
 
 To set up environment run
 ```
-!git clone -b overfit https://github.com/ArturGoldman/TTS
+!git clone https://github.com/ArturGoldman/TTS
 !chmod u+x ./TTS/prep.sh
 !./TTS/prep.sh
 ```
