@@ -1,6 +1,8 @@
 # TTS
 Text To Speech HW for DLA HSE course
 
+Implementing [FastSpeech](https://arxiv.org/pdf/1905.09263.pdf)
+
 ## Running guide
 
 All commands are written as if they are executed in Google Colab
