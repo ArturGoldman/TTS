@@ -7,18 +7,19 @@ Implementing [FastSpeech](https://arxiv.org/pdf/1905.09263.pdf)
 
 All commands are written as if they are executed in Google Colab
 
-To set up environment run
+To set up environment first run
 ```
 !git clone https://github.com/ArturGoldman/TTS
 !chmod u+x ./TTS/prep.sh
 !./TTS/prep.sh
 ```
 
-To start testing run
+After this run
 ```
 !chmod u+x ./TTS/test.sh
 ! ./TTS/test.sh
 ```
+to start testing.
 
 By default training sentences are specified in `sentences.txt`. If you want to pass you own file with sentences,
 place it in the same directory and provide path to it in `config_test.json` under 'file_dir' field. Then, execute commands above.
