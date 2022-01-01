@@ -39,7 +39,7 @@ MelSpectrograms appear blurry, thus synthesised wav sounds like a robot with cra
 
 ## Implementation details
 For stable Transformer training some details were implemented, which are:
-- Pre Layer Norm
+- Pre Layer Norm (WARNING: I realised, that pre layer norm is implemented with mistake. Though, fixing it adds very little loss decrease)
 - SmallInit weight initialisation from [this tutorial](https://tnq177.github.io/data/transformers_without_tears.pdf)
 - Lr warmup with OneCycle cos annealing
 - Masked MultiHeadAttention mechanism from [this tutorial](https://uvadlc-notebooks.readthedocs.io/en/latest/tutorial_notebooks/tutorial6/Transformers_and_MHAttention.html)
